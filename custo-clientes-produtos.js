@@ -892,22 +892,12 @@ function exportarParaExcel() {
             .replace(/ñ/g, 'n').replace(/Ñ/g, 'N');
     };
 
-    // Função para determinar o alinhamento da célula
-    const getCellAlignment = (value, columnType) => {
-        // Sempre centraliza margens
-        if (columnType === 'margem') {
-            return 'center';
-        }
-        
-        // Para preços, centraliza se for 0 ou "-"
-        if (columnType === 'preco' && (value === '0' || value === '-' || value === '0.00' || value === '0,00')) {
-            return 'center';
-        }
-        
-        return 'left';
-    };
-
     for (const [vendedor, tabelas] of Object.entries(tabelasPorVendedor)) {
+        // Criar um novo workbook
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Sistema de Custos e Margens';
+        workbook.created = new Date();
+
         // Agrupar tabelas por cliente
         const tabelasPorCliente = {};
         tabelas.forEach(tabela => {
@@ -917,151 +907,198 @@ function exportarParaExcel() {
             tabelasPorCliente[tabela.cliente][tabela.tipo] = tabela.dados;
         });
 
-        let html = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" 
-              xmlns:x="urn:schemas-microsoft-com:office:excel"
-              xmlns="http://www.w3.org/TR/REC-html40">
-        <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-            <!--[if gte mso 9]>
-            <xml>
-                <x:ExcelWorkbook>
-                    <x:ExcelWorksheets>
-                        ${Object.keys(tabelasPorCliente).map(cliente => `
-                        <x:ExcelWorksheet>
-                            <x:Name>${sanitizeText(cliente.substring(0, 31))}</x:Name>
-                            <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-                        </x:ExcelWorksheet>
-                        `).join('')}
-                    </x:ExcelWorksheets>
-                </x:ExcelWorkbook>
-            </xml>
-            <![endif]>
-            <style>
-                .produto { background-color: #FFD1DC; font-weight: bold; text-align: center; border: 1px solid #C0C0C0; }
-                .custo { background-color: #FFEB3B; font-weight: bold; text-align: center; border: 1px solid #C0C0C0; }
-                .atual { background-color: #FFDAB9; font-weight: bold; text-align: center; border: 1px solid #C0C0C0; }
-                .pretendido { background-color: #B0E0E6; font-weight: bold; text-align: center; border: 1px solid #C0C0C0; }
-                .linha-branca { background-color: #FFFFFF; }
-                .linha-cinza { background-color: #F8F8F8; }
-                td { padding: 5px; border: 1px solid #C0C0C0; }
-                table { border-collapse: collapse; width: 100%; margin-bottom: 30px; border: none; }
-                h2 { color: #555555; margin-bottom: 10px; font-family: Arial; }
-                h3 { color: #666666; margin: 15px 0 5px 0; font-family: Arial; }
-                .sheet { margin-bottom: 40px; }
-                .center { text-align: center; }
-                .left { text-align: left; }
-            </style>
-        </head>
-        <body>`;
-
         // Para cada cliente (cada cliente será uma aba no Excel)
         for (const [cliente, tabelasCliente] of Object.entries(tabelasPorCliente)) {
-            html += `<div class="sheet">`;
-            html += `<h2>${cliente}</h2>`;
-            
-            // Custo - Clientes e Produtos
+            const worksheet = workbook.addWorksheet(sanitizeText(cliente.substring(0, 31)));
+
+            // Adicionar título do cliente
+            const titleRow = worksheet.addRow([cliente]);
+            titleRow.font = { bold: true, size: 14 };
+            titleRow.alignment = { horizontal: 'center' };
+            worksheet.mergeCells(`A1:F1`);
+
+            // Espaçamento
+            worksheet.addRow([]);
+
+            // 1. Tabela Completa (Custo - Clientes e Produtos)
             if (tabelasCliente.completa) {
-                html += `<h3>Custo - Clientes e Produtos</h3>`;
-                html += `
-                <table>
-                    <tr>
-                        <th class="produto">Produto</th>
-                        <th class="custo">Custo</th>
-                        <th class="atual">Preço Atual</th>
-                        <th class="pretendido">Preço Pretendido</th>
-                        <th class="atual">Margem Atual</th>
-                        <th class="pretendido">Margem Pretendida</th>
-                    </tr>`;
-                
-                tabelasCliente.completa.forEach((linha, i) => {
-                    html += `<tr class="${i % 2 === 0 ? 'linha-branca' : 'linha-cinza'}">`;
-                    
-                    // Produto (sempre alinhado à esquerda)
-                    html += `<td class="left">${linha[0]}</td>`;
-                    
-                    // Custo (sempre alinhado à esquerda)
-                    html += `<td class="left">${linha[1]}</td>`;
-                    
-                    // Preço Atual (centraliza se for 0 ou "-")
-                    const precoAtualAlign = getCellAlignment(linha[2], 'preco');
-                    html += `<td class="${precoAtualAlign}">${linha[2]}</td>`;
-                    
-                    // Preço Pretendido (centraliza se for 0 ou "-")
-                    const precoPretendidoAlign = getCellAlignment(linha[3], 'preco');
-                    html += `<td class="${precoPretendidoAlign}">${linha[3]}</td>`;
-                    
-                    // Margem Atual (sempre centralizado)
-                    html += `<td class="center">${linha[4]}</td>`;
-                    
-                    // Margem Pretendida (sempre centralizado)
-                    html += `<td class="center">${linha[5]}</td>`;
-                    
-                    html += `</tr>`;
-                });
-                
-                html += `</table>`;
-            }
+                // Título da tabela
+                const tableTitleRow = worksheet.addRow(['Custo - Clientes e Produtos']);
+                tableTitleRow.font = { bold: true };
+                worksheet.mergeCells(`A3:F3`);
 
-            // Espaço entre tabelas
-            html += `<tr></tr>`;
-            
-            // Preços de venda
-            if (tabelasCliente.simplificada) {
-                html += `<h3>Preços de Venda</h3>`;
-                html += `
-                <table>
-                    <tr>
-                        <th class="produto">Produto</th>
-                        <th class="pretendido">Preço Pretendido</th>
-                        <th class="pretendido">Margem Pretendida</th>
-                    </tr>`;
+                // Cabeçalhos
+                const headers = ['Produto', 'Custo', 'Preço Atual', 'Preço Pretendido', 'Margem Atual', 'Margem Pretendida'];
+                const headerRow = worksheet.addRow(headers);
+                
+                // Formatar cabeçalhos com cores diferentes para cada coluna
+                headerRow.eachCell((cell, colNumber) => {
+                    cell.font = { bold: true };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { horizontal: 'center' };
 
-                tabelasCliente.simplificada.forEach((linha, i) => {
-                    // Verifica se é a estrutura da Preços de venda (4 colunas)
-                    if (linha.length === 4) {
-                        html += `<tr class="${i % 2 === 0 ? 'linha-branca' : 'linha-cinza'}">`;
-                        // Produto (sempre alinhado à esquerda)
-                        html += `<td class="left">${linha[0]}</td>`;
-                        
-                        // Preço Pretendido (centraliza se for 0 ou "-")
-                        const precoPretendidoAlign = getCellAlignment(linha[2], 'preco');
-                        html += `<td class="${precoPretendidoAlign}">${linha[2]}</td>`;
-                        
-                        // Margem Pretendida (sempre centralizado)
-                        html += `<td class="center">${linha[3]}</td>`;
-                        html += `</tr>`;
-                    } 
-                    // Se for a estrutura de Custo - Clientes e Produtos (6 colunas)
-                    else if (linha.length === 6) {
-                        html += `<tr class="${i % 2 === 0 ? 'linha-branca' : 'linha-cinza'}">`;
-                        // Produto (sempre alinhado à esquerda)
-                        html += `<td class="left">${linha[0]}</td>`;
-                        
-                        // Preço Pretendido (centraliza se for 0 ou "-")
-                        const precoPretendidoAlign = getCellAlignment(linha[3], 'preco');
-                        html += `<td class="${precoPretendidoAlign}">${linha[3]}</td>`;
-                        
-                        // Margem Pretendida (sempre centralizado)
-                        html += `<td class="center">${linha[5]}</td>`;
-                        html += `</tr>`;
+                    // Cores diferentes para cada tipo de coluna
+                    if (colNumber === 1) { // Produto
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1DC' } };
+                    } else if (colNumber === 2) { // Custo
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEB3B' } };
+                    } else if (colNumber === 3) { // Preço Atual
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDAB9' } };
+                    } else if (colNumber === 4) { // Preço Pretendido
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'B0E0E6' } };
+                    } else { // Margens
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E6E6FA' } };
                     }
                 });
 
-                html += `</table>`;
+                // Adicionar dados
+                tabelasCliente.completa.forEach(linha => {
+                    const newRow = worksheet.addRow(linha);
+                    
+                    // Formatar células
+                    newRow.eachCell((cell, colNumber) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        
+                        // Alinhamento
+                        if (colNumber === 1 || colNumber === 2) { // Produto e Custo
+                            cell.alignment = { horizontal: 'left' };
+                        } else if (colNumber === 3 || colNumber === 4) { // Preços
+                            const value = cell.value?.toString() || '';
+                            cell.alignment = { 
+                                horizontal: (value === '0' || value === '-' || value === '0.00' || value === '0,00') ? 'center' : 'left' 
+                            };
+                        } else { // Margens
+                            cell.alignment = { horizontal: 'center' };
+                        }
+                    });
+                });
+
+                // Espaçamento entre tabelas
+                worksheet.addRow([]);
+                worksheet.addRow([]);
             }
+
+            // 2. Tabela Simplificada (Preços de Venda)
+            if (tabelasCliente.simplificada) {
+                // Título da tabela
+                const startRow = worksheet.rowCount + 1;
+                const tableTitleRow = worksheet.addRow(['Preços de Venda']);
+                tableTitleRow.font = { bold: true };
+                worksheet.mergeCells(`A${startRow}:C${startRow}`);
             
-            html += `</div>`; // Fecha a div.sheet
+                // Cabeçalhos
+                const headers = ['Produto', 'Preço Pretendido', 'Margem Pretendida'];
+                const headerRow = worksheet.addRow(headers);
+                
+                // Formatar cabeçalhos
+                headerRow.eachCell((cell, colNumber) => {
+                    cell.font = { bold: true };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = { horizontal: 'center' };
+                
+                    // Cores diferentes para cada coluna
+                    if (colNumber === 1) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1DC' } };
+                    } else if (colNumber === 2) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'B0E0E6' } };
+                    } else {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E6E6FA' } };
+                    }
+                });
+            
+                // Adicionar dados - tratamento robusto para todas as estruturas
+                tabelasCliente.simplificada.forEach(linha => {
+                    // Verificar se a linha é válida
+                    if (!linha || linha.length < 3) return;
+                
+                    // Extrair dados de acordo com diferentes estruturas possíveis
+                    let produto, precoPretendido, margemPretendida;
+                    
+                    if (linha.length === 4) {
+                        // Estrutura: [Produto, Custo, Preço Pretendido, Margem Pretendida]
+                        produto = linha[0];
+                        precoPretendido = linha[2];
+                        margemPretendida = linha[3];
+                    } else if (linha.length === 6) {
+                        // Estrutura: [Produto, Custo, Preço Atual, Preço Pretendido, Margem Atual, Margem Pretendida]
+                        produto = linha[0];
+                        precoPretendido = linha[3];
+                        margemPretendida = linha[5];
+                    } else {
+                        // Estrutura mínima: [Produto, Preço Pretendido, Margem Pretendida]
+                        produto = linha[0];
+                        precoPretendido = linha[1];
+                        margemPretendida = linha[2];
+                    }
+                
+                    // Garantir que temos todos os valores necessários
+                    if (produto === undefined || precoPretendido === undefined || margemPretendida === undefined) {
+                        console.warn('Dados incompletos na linha:', linha);
+                        return;
+                    }
+                
+                    const newRow = worksheet.addRow([produto, precoPretendido, margemPretendida]);
+                    
+                    // Formatar células
+                    newRow.eachCell((cell, colNumber) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        
+                        // Alinhamento
+                        if (colNumber === 1) {
+                            cell.alignment = { horizontal: 'left' };
+                        } else if (colNumber === 2) {
+                            const value = cell.value?.toString() || '';
+                            cell.alignment = { 
+                                horizontal: (value === '0' || value === '-' || value === '0.00' || value === '0,00') ? 'center' : 'left' 
+                            };
+                        } else {
+                            cell.alignment = { horizontal: 'center' };
+                        }
+                    });
+                });
+            }
+
+            // Ajustar largura das colunas
+            worksheet.columns.forEach(column => {
+                let maxLength = 0;
+                column.eachCell({ includeEmpty: true }, cell => {
+                    const columnLength = cell.value ? cell.value.toString().length : 0;
+                    if (columnLength > maxLength) {
+                        maxLength = columnLength;
+                    }
+                });
+                column.width = Math.min(Math.max(maxLength + 2, 10), 30);
+            });
         }
 
-        html += `</body></html>`;
-
-        // Criar blob e fazer download
-        const blob = new Blob([html], {type: 'application/vnd.ms-excel;charset=utf-8'});
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Preços Pretendidos (${getShortName(vendedor)}) - ${new Date().toISOString().slice(0,10)}.xls`;
-        link.click();
+        // Gerar o arquivo Excel
+        workbook.xlsx.writeBuffer().then(buffer => {
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Preços Pretendidos (${getShortName(vendedor)}) - ${new Date().toISOString().slice(0,10)}.xlsx`;
+            link.click();
+        });
     }
 
     alert("Arquivos Excel gerados com sucesso (um por vendedor).");
