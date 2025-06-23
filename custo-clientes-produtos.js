@@ -671,7 +671,6 @@ function salvarTabelaCliente() {
     alert(`Tabelas salvas para o cliente ${cliente} no vendedor ${vendedor}`);
 }
 
-// E atualizar a função exibirTabelasSalvas para mostrar ambas as tabelas
 function exibirTabelasSalvas() {
     const container = document.getElementById('tabelas-salvas');
     container.innerHTML = '';
@@ -724,9 +723,26 @@ function exibirTabelasSalvas() {
                     { name: "Margem Pretendida", width: "110px" }
                 ];
                 
+                // Função para determinar a cor do cabeçalho baseado no índice da coluna
+                const getHeaderColor = (colIndex, colName) => {
+                    if (colName === 'Produto') return '#FFD1DC';
+                    if (colName === 'Custo') return '#FFEB3B';
+                    if (colName === 'Preço Atual') return '#FFDAB9';
+                    if (colName === 'Preço Pretendido') return '#B0E0E6';
+                    return '#E6E6FA'; // Margens
+                };
+                
                 new gridjs.Grid({
-                    columns: columns.map(col => ({
+                    columns: columns.map((col, colIndex) => ({
                         ...col,
+                        header: {
+                            ...col,
+                            attributes: (cell) => ({
+                                style: `background-color: ${getHeaderColor(colIndex, col.name)} !important; 
+                                        font-weight: bold; 
+                                        color: #333;`
+                            })
+                        },
                         formatter: (cell) => cell === '-' ? gridjs.html('<span style="color: #999">-</span>') : cell
                     })),
                     data: tabela.dados,

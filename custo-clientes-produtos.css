@@ -205,3 +205,29 @@ button:hover {
     outline: 2px solid #4CAF50;
     border-color: #4CAF50;
 }
+
+/* Remove qualquer estilo de fundo das células */
+.gridjs-td {
+    background-color: transparent !important;
+}
+
+/* Cores específicas apenas para cabeçalhos */
+.gridjs-th[data-column-name="Produto"] {
+    background-color: #FFD1DC !important;
+}
+
+.gridjs-th[data-column-name="Custo"] {
+    background-color: #FFEB3B !important;
+}
+
+.gridjs-th[data-column-name="Preço Atual"] {
+    background-color: #FFDAB9 !important;
+}
+
+.gridjs-th[data-column-name="Preço Pretendido"] {
+    background-color: #B0E0E6 !important;
+}
+
+.gridjs-th[data-column-name*="Margem"] {
+    background-color: #E6E6FA !important;
+}
