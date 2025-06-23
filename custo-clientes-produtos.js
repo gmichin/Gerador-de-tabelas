@@ -1119,6 +1119,7 @@ function exportarParaExcel() {
 
     alert("Arquivos Excel gerados com sucesso (um por vendedor).");
 }
+
 // Função para exportar todas as tabelas como PDF (ajustado para layout completo)
 function exportarParaPDF() {
     // Verificar se há tabelas salvas
@@ -1129,7 +1130,6 @@ function exportarParaPDF() {
 
     // Para cada vendedor, criar um PDF
     for (const [vendedor, tabelas] of Object.entries(tabelasPorVendedor)) {
-        // Usar a versão UMD do jsPDF
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         let yPos = 20;
@@ -1143,50 +1143,95 @@ function exportarParaPDF() {
             tabelasPorCliente[tabela.cliente].push(tabela);
         });
 
+        // Configurações de estilo
+        const styles = {
+            header: { fontSize: 14, fontStyle: 'bold' },
+            subHeader: { fontSize: 10 },
+            tableTitle: { fontSize: 12, fontStyle: 'bold' },
+            tableContent: { fontSize: 8 }
+        };
+
         // Para cada cliente, adicionar as tabelas ao PDF
         for (const [cliente, tabelasCliente] of Object.entries(tabelasPorCliente)) {
+            // Verificar espaço disponível na página
+            const checkSpace = (requiredSpace) => {
+                const pageHeight = doc.internal.pageSize.height;
+                const remainingSpace = pageHeight - yPos - 10; // 10 de margem inferior
+                return remainingSpace > requiredSpace;
+            };
+
+            // Função para adicionar tabela com verificação de espaço
+            const addTableWithCheck = (title, headers, data, isSimplified = false) => {
+                // Calcular altura estimada da tabela
+                const rowHeight = 7; // altura estimada por linha
+                const estimatedHeight = (data.length + 1) * rowHeight + 20; // +1 para cabeçalho, +20 para margens
+
+                // Se não couber na página atual, adicionar nova página
+                if (!checkSpace(estimatedHeight)) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                // Adicionar título da tabela
+                doc.setFontSize(styles.tableTitle.fontSize);
+                doc.setFont(undefined, styles.tableTitle.fontStyle);
+                doc.text(title, 15, yPos);
+                yPos += 7;
+
+                // Configurar tabela
+                const tableConfig = {
+                    startY: yPos,
+                    head: [headers],
+                    body: data,
+                    margin: { left: 15 },
+                    styles: { 
+                        fontSize: styles.tableContent.fontSize,
+                        cellPadding: 2
+                    },
+                    // Reduzir tamanho da fonte se a tabela for muito grande
+                    didDrawPage: function(data) {
+                        yPos = data.cursor.y + 10;
+                    },
+                    // Evitar quebra de tabelas entre páginas
+                    pageBreak: 'avoid',
+                    // Ajustar automaticamente o tamanho para caber na página
+                    tableWidth: 'auto',
+                    columnStyles: {
+                        0: { cellWidth: isSimplified ? 60 : 40 }, // Ajustar largura da coluna de produto
+                        // Outras colunas serão ajustadas automaticamente
+                    }
+                };
+
+                // Adicionar tabela
+                doc.autoTable(tableConfig);
+                yPos = doc.lastAutoTable.finalY + 10;
+            };
+
             // Adicionar cabeçalho do cliente
-            doc.setFontSize(14);
+            if (!checkSpace(30)) { // 30 é o espaço estimado para o cabeçalho
+                doc.addPage();
+                yPos = 20;
+            }
+
+            doc.setFontSize(styles.header.fontSize);
+            doc.setFont(undefined, styles.header.fontStyle);
             doc.text(`Cliente: ${cliente}`, 15, yPos);
-            doc.setFontSize(10);
-            yPos += 10;
+            doc.setFontSize(styles.subHeader.fontSize);
+            doc.setFont(undefined, 'normal');
+            yPos += 7;
             doc.text(`Contrato: ${tabelasCliente[0].contrato}% | Comissão: ${tabelasCliente[0].comissao}%`, 15, yPos);
             yPos += 15;
 
             // Tabela Completa
-            doc.setFontSize(12);
-            doc.text('Custo - Clientes e Produtos', 15, yPos);
-            yPos += 10;
-            
+            const tabelaCompleta = tabelasCliente.find(t => t.tipo === 'completa');
             const headersCompleta = ["Produto", "Custo", "Preço Atual", "Preço Pretendido", "Margem Atual", "Margem Pretendida"];
-            const dataCompleta = tabelasCliente.find(t => t.tipo === 'completa').dados;
-            
-            doc.autoTable({
-                startY: yPos,
-                head: [headersCompleta],
-                body: dataCompleta,
-                margin: { left: 15 },
-                styles: { fontSize: 8 }
-            });
-            yPos = doc.lastAutoTable.finalY + 10;
+            addTableWithCheck('Custo - Clientes e Produtos', headersCompleta, tabelaCompleta.dados);
 
-            // Preços de Venda
-            doc.setFontSize(12);
-            doc.text('Preços de Venda', 15, yPos);
-            yPos += 10;
-            
+            // Tabela Simplificada
+            const tabelaSimplificada = tabelasCliente.find(t => t.tipo === 'simplificada');
             const headersSimplificada = ["Produto", "Preço Pretendido", "Margem Pretendida"];
-            const dataSimplificada = tabelasCliente.find(t => t.tipo === 'simplificada').dados;
-            
-            doc.autoTable({
-                startY: yPos,
-                head: [headersSimplificada],
-                body: dataSimplificada,
-                margin: { left: 15 },
-                styles: { fontSize: 8 }
-            });
-            yPos = doc.lastAutoTable.finalY + 15;
-            
+            addTableWithCheck('Preços de Venda', headersSimplificada, tabelaSimplificada.dados, true);
+
             // Adicionar nova página se não for o último cliente
             if (Object.keys(tabelasPorCliente).indexOf(cliente) < Object.keys(tabelasPorCliente).length - 1) {
                 doc.addPage();
